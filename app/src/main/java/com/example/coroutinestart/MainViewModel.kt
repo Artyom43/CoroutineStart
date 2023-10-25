@@ -2,12 +2,10 @@ package com.example.coroutinestart
 
 import android.util.Log
 import androidx.lifecycle.ViewModel
-import kotlinx.coroutines.CoroutineExceptionHandler
-import kotlinx.coroutines.CoroutineScope
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 
 /** Structured concurrency
@@ -21,35 +19,36 @@ import kotlinx.coroutines.launch
 
 class MainViewModel : ViewModel() {
 
-    private val parentJob = Job()
-    private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
-        Log.d(TAG, "exception caught: $throwable")
-    }
-    private val coroutineScope = CoroutineScope(Dispatchers.Main + parentJob + exceptionHandler)
-
     fun method() {
-        val childJob1 = coroutineScope.launch {
+        val job = viewModelScope.launch(Dispatchers.Default) {
+            Log.d(TAG, "Started")
+            val before = System.currentTimeMillis()
+            var count = 0
+            for (i in 0 until 100_000_000) {
+                for (j in 0 until 100) {
+                    ensureActive()
+                    count++
+
+//                    or
+//
+//                    if (isActive) {
+//                        count++
+//                    } else {
+//                        throw CancellationException()
+//                    }
+                }
+            }
+            Log.d(TAG, "Finished: ${System.currentTimeMillis() - before}")
+        }
+
+        job.invokeOnCompletion {
+            Log.d(TAG, "Coroutine was finished: $it")
+        }
+
+        viewModelScope.launch {
             delay(3000)
-            Log.d(TAG, "first coroutine finished")
+            job.cancel()
         }
-        val childJob2 = coroutineScope.launch {
-            delay(2000)
-            Log.d(TAG, "second coroutine finished")
-        }
-        val childJob3 = coroutineScope.launch {
-            delay(1000)
-            error()
-            Log.d(TAG, "third coroutine finished")
-        }
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        coroutineScope.cancel()
-    }
-
-    private fun error() {
-        throw RuntimeException()
     }
 
     companion object {
